@@ -14,10 +14,12 @@ import (
 )
 
 type Dependencies struct {
-	Pool         *pgxpool.Pool
-	JWT          *helper.JWTManager
-	Auth         *service.AuthService
-	Student      *service.StudentService
+	Pool       *pgxpool.Pool
+	JWT        *helper.JWTManager
+	Auth       *service.AuthService
+	Student    *service.StudentService
+	Course     *service.CourseService
+	Enrollment *service.EnrollmentService
 }
 
 func Register(app *fiber.App, deps Dependencies) {
@@ -28,15 +30,18 @@ func Register(app *fiber.App, deps Dependencies) {
 	auth := api.Group("/auth", middleware.RequireJSON)
 	auth.Post("/login", middleware.LoginRateLimiter(), deps.Auth.Login)
 	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.Auth.Me)
+	api.Get("/courses", middleware.RequireAuth(deps.JWT), deps.Course.List)
 
 	students := api.Group("/students", middleware.RequireJSON, middleware.RequireAuth(deps.JWT))
-	
 	students.Get("/", middleware.RequireRole(model.RoleAdmin), deps.Student.List)
 	students.Post("/", middleware.RequireRole(model.RoleAdmin), deps.Student.Create)
 	students.Put("/:id", middleware.RequireRole(model.RoleAdmin), deps.Student.Update)
 	students.Delete("/:id", middleware.RequireRole(model.RoleAdmin), deps.Student.Delete)
-
 	students.Get("/:id", deps.Student.Get)
+
+	enrollments := api.Group("/enrollments", middleware.RequireJSON, middleware.RequireAuth(deps.JWT), middleware.RequireRole(model.RoleMahasiswa))
+	enrollments.Post("/", deps.Enrollment.Create)
+	enrollments.Delete("/:id", deps.Enrollment.Delete)
 }
 
 func healthCheck(pool *pgxpool.Pool) fiber.Handler {

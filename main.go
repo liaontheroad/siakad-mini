@@ -17,6 +17,7 @@ import (
 )
 
 func main() {
+
 	config.LoadEnv()
 	logger := config.NewLogger()
 
@@ -38,15 +39,21 @@ func main() {
 
 	userRepo := repository.NewUserRepository(pool)
 	studentRepo := repository.NewStudentRepository(pool)
-	
+	courseRepo := repository.NewCourseRepository(pool)
+	enrollmentRepo := repository.NewEnrollmentRepository(pool)
+
 	authService := service.NewAuthService(userRepo, studentRepo, jwtManager)
 	studentService := service.NewStudentService(studentRepo)
+	courseService := service.NewCourseService(courseRepo)
+	enrollmentService := service.NewEnrollmentService(enrollmentRepo, studentRepo)
 
 	deps := route.Dependencies{
-		Pool:    pool,
-		JWT:     jwtManager,
-		Auth:    authService,
-		Student: studentService,
+		Pool:       pool,
+		JWT:        jwtManager,
+		Auth:       authService,
+		Student:    studentService,
+		Course:     courseService,
+		Enrollment: enrollmentService,
 	}
 
 	app := config.NewApp(logger, deps)
