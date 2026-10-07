@@ -16,7 +16,7 @@ func NewApp(logger *slog.Logger, deps route.Dependencies) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      GetEnv("APP_NAME", "SIAKAD Mini"),
 		ErrorHandler: newErrorHandler(logger),
-		BodyLimit:    1 * 1024 * 1024,
+		BodyLimit:    1 * 1024 * 1024, 
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
