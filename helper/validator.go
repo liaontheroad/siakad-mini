@@ -1,87 +1,111 @@
 package helper
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 )
 
-var validate = newValidator()
+var validate *validator.Validate
 
-func newValidator() *validator.Validate {
-	v := validator.New()
+func init() {
+	validate = validator.New()
 
-	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
-		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
-		if name == "-" {
-			return ""
-		}
-		return name
+	// Mendaftarkan custom tag "maxyear" (untuk angkatan <= tahun berjalan)
+	validate.RegisterValidation("maxyear", func(fl validator.FieldLevel) bool {
+		year := fl.Field().Int()
+		return year >= 1900 && year <= 2026
 	})
 
-	if err := v.RegisterValidation("maxyear", func(fl validator.FieldLevel) bool {
-		return fl.Field().Int() <= int64(time.Now().Year())
-	}); err != nil {
-		panic(err) 
-	}
+	// Mendaftarkan custom tag "tahunakademik"
+	validate.RegisterValidation("tahunakademik", func(fl validator.FieldLevel) bool {
+		val := fl.Field().String()
+		re := regexp.MustCompile(`^(\d{4})/(\d{4})-(Ganjil|Genap)$`)
+		matches := re.FindStringSubmatch(val)
+		if len(matches) != 4 {
+			return false
+		}
 
-	return v
+		var y1, y2 int
+		fmt.Sscanf(matches[1], "%d", &y1)
+		fmt.Sscanf(matches[2], "%d", &y2)
+
+		return y2 == y1+1
+	})
 }
 
-func Validate(s any) map[string][]string {
-	err := validate.Struct(s)
+func Validate(payload any) map[string][]string {
+	errs := make(map[string][]string)
+
+	err := validate.Struct(payload)
 	if err == nil {
 		return nil
 	}
 
-	var verrs validator.ValidationErrors
-	if !errors.As(err, &verrs) {
-		return map[string][]string{"body": {"tidak dapat divalidasi"}}
+	validationErrors, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return map[string][]string{"general": {err.Error()}}
 	}
 
-	out := make(map[string][]string, len(verrs))
-	for _, fe := range verrs {
-		field := fe.Field()
-		out[field] = append(out[field], messageFor(fe))
+	for _, e := range validationErrors {
+		fieldName := getJSONFieldName(payload, e.Field())
+		msg := messageFor(e)
+
+		errs[fieldName] = append(errs[fieldName], msg)
 	}
-	return out
+
+	return errs
 }
 
-func messageFor(fe validator.FieldError) string {
-	isText := fe.Kind() == reflect.String
+func getJSONFieldName(structObj any, fieldName string) string {
+	t := reflect.TypeOf(structObj)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return strings.ToLower(fieldName)
+	}
 
-	switch fe.Tag() {
+	field, found := t.FieldByName(fieldName)
+	if !found {
+		return strings.ToLower(fieldName)
+	}
+
+	jsonTag := field.Tag.Get("json")
+	if jsonTag == "" || jsonTag == "-" {
+		return strings.ToLower(fieldName)
+	}
+
+	parts := strings.Split(jsonTag, ",")
+	return parts[0]
+}
+
+func messageFor(e validator.FieldError) string {
+	switch e.Tag() {
 	case "required":
-		return "wajib diisi"
+		return "Field ini wajib diisi"
 	case "email":
-		return "format email tidak valid"
+		return "Format email tidak valid"
 	case "min":
-		if isText {
-			return fmt.Sprintf("minimal %s karakter", fe.Param())
-		}
-		return fmt.Sprintf("minimal %s", fe.Param())
+		return fmt.Sprintf("Minimal harus bernilai atau sepanjang %s", e.Param())
 	case "max":
-		if isText {
-			return fmt.Sprintf("maksimal %s karakter", fe.Param())
-		}
-		return fmt.Sprintf("maksimal %s", fe.Param())
+		return fmt.Sprintf("Maksimal bernilai atau sepanjang %s", e.Param())
 	case "len":
-		return fmt.Sprintf("harus tepat %s karakter", fe.Param())
+		return fmt.Sprintf("Harus tepat sepanjang %s karakter", e.Param())
 	case "numeric":
-		return "hanya boleh berisi angka"
+		return "Harus berupa angka"
 	case "gte":
-		return fmt.Sprintf("minimal %s", fe.Param())
+		return fmt.Sprintf("Harus bernilai lebih dari atau sama dengan %s", e.Param())
 	case "lte":
-		return fmt.Sprintf("maksimal %s", fe.Param())
+		return fmt.Sprintf("Harus bernilai kurang dari atau sama dengan %s", e.Param())
 	case "maxyear":
-		return "tidak boleh melebihi tahun berjalan"
-	case "oneof":
-		return "harus salah satu dari: " + strings.ReplaceAll(fe.Param(), " ", ", ")
+		return "Angkatan tidak boleh melebihi tahun berjalan"
+	case "tahunakademik":
+		return "format harus 2026/2027-Ganjil atau 2026/2027-Genap"
 	default:
-		return "tidak valid"
+		return fmt.Sprintf("Gagal pada validasi '%s'", e.Tag())
 	}
 }

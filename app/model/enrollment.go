@@ -9,3 +9,8 @@ type Enrollment struct {
 	TahunAkademik string    `json:"tahun_akademik"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+type CreateEnrollmentRequest struct {
+	CourseID      int    `json:"course_id" validate:"required,gte=1"`
+	TahunAkademik string `json:"tahun_akademik" validate:"required,tahunakademik"`
+}
