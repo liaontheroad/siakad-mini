@@ -6,25 +6,24 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"siakad-mini/helper"
 	"siakad-mini/middleware"
 	"siakad-mini/route"
 )
 
-func NewApp(logger *slog.Logger, pool *pgxpool.Pool) *fiber.App {
+func NewApp(logger *slog.Logger, deps route.Dependencies) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      GetEnv("APP_NAME", "SIAKAD Mini"),
 		ErrorHandler: newErrorHandler(logger),
-		BodyLimit:    1 * 1024 * 1024, 
+		BodyLimit:    1 * 1024 * 1024,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	})
 
 	middleware.Register(app, logger, GetEnv("ALLOWED_ORIGINS", "http://localhost:3000"))
-	route.Register(app, pool)
+	route.Register(app, deps)
 
 	app.Use(func(c *fiber.Ctx) error {
 		return helper.NotFound("Endpoint tidak ditemukan")
@@ -60,12 +59,11 @@ func newErrorHandler(logger *slog.Logger) fiber.ErrorHandler {
 				slog.Int("status", status),
 				slog.String("error", err.Error()),
 			)
-		}
-
-		if status == fiber.StatusInternalServerError {
-			message = "Terjadi kesalahan pada server"
-			if !production {
-				fieldErrs = map[string][]string{"debug": {err.Error()}}
+			if status == fiber.StatusInternalServerError {
+				message = "Terjadi kesalahan pada server"
+				if !production {
+					fieldErrs = map[string][]string{"debug": {err.Error()}}
+				}
 			}
 		}
 

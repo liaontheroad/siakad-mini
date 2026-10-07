@@ -8,14 +8,26 @@ import (
 	"syscall"
 	"time"
 
+	"siakad-mini/app/repository"
+	"siakad-mini/app/service"
 	"siakad-mini/config"
 	"siakad-mini/database"
+	"siakad-mini/helper"
+	"siakad-mini/route"
 )
-
 
 func main() {
 	config.LoadEnv()
 	logger := config.NewLogger()
+
+	jwtSecret := config.GetEnv("JWT_SECRET", "")
+	if len(jwtSecret) < 32 {
+		logger.Error("JWT_SECRET tidak valid", slog.String("error", "Harus diatur di .env dan minimal 32 karakter"))
+		os.Exit(1)
+	}
+	jwtIssuer := config.GetEnv("JWT_ISSUER", "siakad-mini")
+	jwtTTLMin := config.GetEnvInt("JWT_ACCESS_TTL_MINUTES", 60)
+	jwtManager := helper.NewJWTManager(jwtSecret, jwtIssuer, time.Duration(jwtTTLMin)*time.Minute)
 
 	pool, err := database.NewPool(context.Background())
 	if err != nil {
@@ -24,9 +36,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	app := config.NewApp(logger, pool)
+	userRepo := repository.NewUserRepository(pool)
+	studentRepo := repository.NewStudentRepository(pool)
+	authService := service.NewAuthService(userRepo, studentRepo, jwtManager)
 
+	deps := route.Dependencies{
+		Pool: pool,
+		JWT:  jwtManager,
+		Auth: authService,
+	}
+
+	app := config.NewApp(logger, deps)
 	port := config.GetEnv("APP_PORT", "3000")
+
 	go func() {
 		if err := app.Listen(":" + port); err != nil {
 			logger.Error("server berhenti", slog.String("error", err.Error()))
@@ -38,8 +60,8 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	logger.Info("sinyal berhenti diterima, menutup server")
 
+	logger.Info("sinyal berhenti diterima, menutup server")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

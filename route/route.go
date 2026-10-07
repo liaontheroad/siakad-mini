@@ -7,13 +7,23 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"siakad-mini/app/service"
 	"siakad-mini/helper"
+	"siakad-mini/middleware"
 )
 
-func Register(app *fiber.App, pool *pgxpool.Pool) {
-	api := app.Group("/api/v1")
+type Dependencies struct {
+	Pool *pgxpool.Pool
+	JWT  *helper.JWTManager
+	Auth *service.AuthService
+}
 
-	api.Get("/health", healthCheck(pool))
+func Register(app *fiber.App, deps Dependencies) {
+	api := app.Group("/api/v1")
+	api.Get("/health", healthCheck(deps.Pool))
+	auth := api.Group("/auth", middleware.RequireJSON)
+	auth.Post("/login", middleware.LoginRateLimiter(), deps.Auth.Login)
+	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.Auth.Me)
 }
 
 func healthCheck(pool *pgxpool.Pool) fiber.Handler {
@@ -24,6 +34,7 @@ func healthCheck(pool *pgxpool.Pool) fiber.Handler {
 		if err := pool.Ping(ctx); err != nil {
 			return helper.ServiceUnavailable("Database tidak dapat dihubungi")
 		}
+
 		return helper.Success(c, fiber.StatusOK, "Server dan database berjalan", nil)
 	}
 }
