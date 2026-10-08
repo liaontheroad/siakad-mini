@@ -33,7 +33,7 @@ func TestValidate_PesanBerupaArray(t *testing.T) {
 	errs := Validate(sampleRequest{NIM: "123", Email: "a@b.com", Angkatan: 2022})
 
 	got := errs["nim"]
-	if len(got) != 1 || got[0] != "harus tepat 12 karakter" {
+	if len(got) != 1 || got[0] != "Harus tepat sepanjang 12 karakter" {
 		t.Errorf("pesan nim tidak sesuai: %v", got)
 	}
 }

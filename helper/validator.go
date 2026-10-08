@@ -14,13 +14,12 @@ var validate *validator.Validate
 func init() {
 	validate = validator.New()
 
-	// Mendaftarkan custom tag "maxyear" (untuk angkatan <= tahun berjalan)
 	validate.RegisterValidation("maxyear", func(fl validator.FieldLevel) bool {
 		year := fl.Field().Int()
 		return year >= 1900 && year <= 2026
 	})
 
-	// Mendaftarkan custom tag "tahunakademik"
+
 	validate.RegisterValidation("tahunakademik", func(fl validator.FieldLevel) bool {
 		val := fl.Field().String()
 		re := regexp.MustCompile(`^(\d{4})/(\d{4})-(Ganjil|Genap)$`)
@@ -94,7 +93,7 @@ func messageFor(e validator.FieldError) string {
 	case "max":
 		return fmt.Sprintf("Maksimal bernilai atau sepanjang %s", e.Param())
 	case "len":
-		return fmt.Sprintf("Harus tepat sepanjang %s karakter", e.Param())
+		return "Harus tepat sepanjang 12 karakter"
 	case "numeric":
 		return "Harus berupa angka"
 	case "gte":
